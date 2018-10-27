@@ -1,0 +1,73 @@
+---
+title: "EFASH"
+author: "Youngseok Kim"
+output: workflowr::wflow_html
+---
+
+## Examples
+
+#### Gaussian-Gaussian case
+
+In case of Gaussian, we have $G(x) = x^2/2$, $\Delta_G(x\|y) = (x-y)^2/2$, $D_G(x\|y) = (x-y)^2/2 - x^2/2$ and 
+
+$$
+H(\nu,t) = e^{\nu^2/2} \sqrt{t/2\pi}
+$$
+
+since
+
+$$
+\mu_j|\nu_k,t_k \sim N(\mu_k,1/t_k)
+$$
+
+#### Poisson-Gamma case
+
+In case of Poisson-Gamma, we have $G(x) = x(\log x-1)$, $\Delta_G(x\|y) = x(\log x- \log y) - x + y$, $D_G(x\|y) = -x \log y + y$ and
+
+$$
+H(\nu,t) = t^{t\nu}\Gamma(t\nu+1)^{-1}
+$$
+
+$$
+\mu_j|\nu_k,t_k \sim \textrm{Gamma}(t_k\nu_k+1,1/t_k)
+$$
+
+and
+
+$$
+\exp\left[t\nu \log\mu - t\mu\right] = \mu^{t\nu}e^{-t\mu}
+$$
+
+## Binomial-Beta case
+
+Let $n$ be the number of Bernoulli trial. In case of Beta, we have $G(x) = x \log \frac{x}{n} + (n-x) \log \frac{n-x}{n}$, $\Delta_G(x\|y) = x\log \frac{x}{y} + (n-x)\log \frac{n-x}{n-y}$, $D_G(x\|y) = - x\log \frac{y}{n} - (n-x) \log \frac{n-y}{n}$ and
+
+$$
+H(\nu,t) = 
+$$
+
+since
+
+$$
+\mu_j|\nu_k,t_k \sim \textrm{Beta}(t_k\nu_k+1,1/t_k)
+$$
+
+#### Dirichlet case
+
+
+```{r}
+H_partition_function <- function(family = "normal", G = NA, D_G = NA){
+  
+  if(family == "normal" || family == "Gaussian"){
+    H <- function(nu,t){
+      return( sqrt(t/2/pi) )
+      }
+  }
+  
+  if(family == "gamma"){
+     H <- function(nu,t){
+      return( sqrt(t/2/pi) )
+      }
+  }
+}
+```

@@ -27,3 +27,10 @@ $$
 $$
 
 where $H(0,t_k)$ is a partition function and $\phi_k$'s are mixture proportions.
+
+More generally,
+
+$$
+\mu_j|\nu,\phi,t \sim \sum_{k=1}^m \phi_k H(\nu_k,t_k) \exp\left[ -t_k D_G(\nu_k\|\mu_j) \right]
+$$
+can be used.
