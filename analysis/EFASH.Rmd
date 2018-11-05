@@ -25,7 +25,7 @@ $$
 In case of Poisson-Gamma, we have $G(x) = x(\log x-1)$, $\Delta_G(x\|y) = x(\log x- \log y) - x + y$, $D_G(x\|y) = -x \log y + y$ and
 
 $$
-H(\nu,t) = t^{t\nu}\Gamma(t\nu+1)^{-1}
+H(\nu,t) = t^{t\nu + 1}\Gamma(t\nu+1)^{-1}
 $$
 
 $$
@@ -43,13 +43,13 @@ $$
 Let $n$ be the number of Bernoulli trial. In case of Beta, we have $G(x) = x \log \frac{x}{n} + (n-x) \log \frac{n-x}{n}$, $\Delta_G(x\|y) = x\log \frac{x}{y} + (n-x)\log \frac{n-x}{n-y}$, $D_G(x\|y) = - x\log \frac{y}{n} - (n-x) \log \frac{n-y}{n}$ and
 
 $$
-H(\nu,t) = 
+H(\nu,t) = \frac{\Gamma(nt+2)}{\Gamma(nt\nu + 1)\Gamma(nt(1-\nu)+1)}
 $$
 
 since
 
 $$
-\mu_j|\nu_k,t_k \sim \textrm{Beta}(t_k\nu_k+1,1/t_k)
+\mu_j|\nu_k,t_k \sim \textrm{Beta}(nt_k\nu_k+1,nt_k(1-\nu_k)+1)
 $$
 
 #### Dirichlet case
@@ -58,16 +58,39 @@ $$
 ```{r}
 H_partition_function <- function(family = "normal", G = NA, D_G = NA){
   
-  if(family == "normal" || family == "Gaussian"){
+  if(family == "normal" || family == "gaussian"){
     H <- function(nu,t){
       return( sqrt(t/2/pi) )
-      }
+    }
+    h <- function(nu,t){
+      return( log(t)/2 - log(2*pi)/2 )
+    }
   }
   
   if(family == "gamma"){
      H <- function(nu,t){
-      return( sqrt(t/2/pi) )
-      }
+      return( t^(t * nu + 1) * gamma(t * nu + 1)^(-1) )
+     }
+     h <- function(nu,t){
+      return( (t * nu + 1) * log(t) - lgamma(t * nu + 1))
+    }
+  }
+  
+  if(family == "beta"){
+    
+  }
+  
+  if(family == "dirichlet"){
+    
+  }
+}
+```
+
+
+```{r}
+H_partition_manual(G = NA, D_G = NA){
+  if(G == NA){
+    
   }
 }
 ```
