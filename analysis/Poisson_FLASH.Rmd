@@ -1,0 +1,231 @@
+---
+title: "Untitled"
+author: Youngseok Kim
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Poisson ASH
+
+### Introduciton
+
+Here we develop a Poisson ASH. We generalize the ASH problem to exponential family, but we will restrict ourselves to Poisson verison in this note. See https://stephenslab.slack.com/files/U1UJQLMAA/FD4JJ8VMJ/sample_appendix.pdf for details.
+
+Basically we consider
+
+$$
+x_i | \mu_i,\tau_i \sim Poisson(\tau_i\mu_i)/\tau_i
+$$
+so that $\mathbb{E}x_i = \mu_i$ and $\mathbb{V}\textrm{ar}(x_i) = \mu_i/\tau_i$. Note that this modeling is inappropriate for count data unless $\tau_i = 1$. When we consider the model in above, we mainly consider the Poisson NMF problem that has continuous observations, e.g. 2-dimensional image.
+
+We put a scale mixture of Gamma distributions
+
+$$
+p(\mu_i|\phi,\nu,t) = \sum_{k=1}^m \phi_k\cdot p(\mu_i|\nu_k,t_k)
+$$
+
+$$
+\mu_i|\nu_k,t_k \sim \textrm{Gamma}(t_k\nu_k + 1,t_k)
+$$
+
+where $t_k$ is a rate parameter here. When $\nu_k = 0$ then it reduces to the exponential family $\textrm{Exp}(t_k)$ where $t_k$ is again a rate parameter. Any mixture component prior $p(\mu_i|\nu_k,t_k)$ has a unique mode at $\nu_k$. We will let $\nu_k = 0$ for simplicity. The scale mixture prior $p(\mu_i|\phi,t)$ is then a unimodal distribution (mode at $0$).
+
+Estimation of the mixture proportions $\phi$ can be done efficiently by mixsqp as long as we can calculate the log-partition function $h$ (or a partition function $H$) of each component mixture prior. 
+
+### Simulation
+
+```{r}
+H <- function(t, nu = 0, t_prod_nu = t * nu){
+  return( t^(t_prod_nu + 1) * gamma((t_prod_nu + 1)^(-1)) )
+}
+h <- function(t, nu = 0,  t_prod_nu = t * nu){
+  return( (t_prod_nu + 1) * log(t) - lgamma(t_prod_nu + 1) )
+}
+select_grid <- function(x, tau, nv = 20){
+  x2_prod_tau <- x^2 * tau;
+  M           <- 10 * max(x2_prod_tau);
+  logM        <- ceiling(log10(M));
+  t           <- 10^seq(-5 * logM, logM, length = nv - 1);
+  return(t)
+}
+```
+
+Now we solve a Poisson version ASH problem.
+
+```{r}
+EFASH_poisson_test <- function(seed = 1){
+  
+  # set seed
+  set.seed(seed)
+  
+  # sample the data
+  mu_true <- c(rep(0,199),seq(0,10,0.05))
+  n       <- length(mu_true)
+  tau     <- rep(1,n)*2
+  x       <- mu_true + (mu_true + 1) * rexp(n)/5
+  x_prod_tau <- x * tau
+  
+  # choose grid t and mode nu
+  nv      <- 20
+  t       <- select_grid(x, tau, nv = nv)
+  nu      <- 0
+  
+  # compute likelihood matrix
+  logL    <- h(t) - h(outer(t, tau, '+'), t_prod_nu = outer(t * nu, x_prod_tau, '+'))
+  L       <- exp(t(logL) - apply(logL, 2, max))
+  
+  # solve mixsqp
+  fit     <- mixsqp(L, control = list(verbose = FALSE))
+  
+  # compute posterior
+  nz_ind  <- which(fit$x > 0);
+  p_nz = fit$x[nz_ind];
+  t_nz = t[nz_ind];
+  L_nz = L[,nz_ind];
+  L_post = t(t(L_nz) * p_nz);
+  L_post = L_post / rowSums(L_post);
+  cpm = x_prod_tau/outer(tau,t_nz,'+'); # component posterior mean
+  pm = rowSums(L_post * cpm);           # posterior mean
+  
+  df = data.frame(n = 1:n, x = x, mu_true = mu_true, mu_hat = pm)
+  return(df)
+}
+```
+
+### Result
+
+Let's see the result.
+
+```{r}
+library(mixsqp); library(ggplot2)
+out = EFASH_poisson_test()
+ggplot(out)  + geom_point(aes(x = n, y = mu_true, color = "true"), cex = 0.5) +
+               geom_point(aes(x = n, y = x, color = "x"), cex = 0.5) +
+               geom_point(aes(x = n, y = mu_hat, color = "mu_hat"), cex = 0.5) +
+               labs(x = "index", y = "mu", title = "Poisson ASH") +
+               guides(fill = "color")
+```
+
+## Poisson FLASH
+
+```{r}
+library(imager)
+X = load.image("~/git/Peter/EFASH/data/images.png")
+plot(X)
+```
+
+```{r}
+EFASH_poisson <- function(x, tau, nv = nv){
+  
+  # precalculation
+  x_prod_tau <- x * tau
+  
+  # choose grid t and mode nu
+  nv      <- 20
+  t       <- select_grid(x, tau, nv = nv)
+  nu      <- 0
+  
+  # compute likelihood matrix
+  logL    <- h(t) - h(outer(t, tau, '+'), t_prod_nu = outer(t * nu, x_prod_tau, '+'))
+  L       <- exp(t(logL) - apply(logL, 2, max))
+  
+  # solve mixsqp
+  fit     <- mixsqp(L, control = list(verbose = FALSE))
+  
+  # compute posterior
+  nz_ind  <- which(fit$x > 0);
+  p_nz = fit$x[nz_ind];
+  t_nz = t[nz_ind];
+  L_nz = L[,nz_ind];
+  L_post = t(t(L_nz) * p_nz);
+  L_post = L_post / rowSums(L_post);
+  cpm = x_prod_tau/outer(tau,t_nz,'+'); # component posterior mean
+  pm = rowSums(L_post * cpm);           # posterior mean
+  
+  return(pm)
+}
+```
+
+
+```{r}
+X = X = load.image("~/git/Peter/EFASH/data/images.png")[,,1,1]
+
+EFMF_poisson <- function(X, k = 1, maxiter = 100){
+  
+  # set size
+  n   = dim(X)[1];
+  p   = dim(X)[2];
+  
+  # random initialization
+  set.seed(1)
+  L   = matrix(runif(n*k), n, k);
+  F   = matrix(runif(p*k), p, k);
+  
+  # constant structure for precision
+  # tau = matrix(1,n,p) * sum(L %*% t(F)) / norm(X- L %*% t(F), type = "f")^2;
+  # method of moments
+  X_hat = L %*% t(F)
+  tau = sum(X_hat) / norm(X - X_hat, type = "f")^2
+  
+  # define function
+  update_F = function(X, tau, L, F, nullprior = 100){
+    r       = dim(F)[1];
+    xi      = tau * colSums(L);
+    y       = F * t((t(L) %*% (tau * X / L %*% t(F))) / xi);
+    xi_root = t(matrix(rep(xi,r),k,r))
+    #fit = ash(as.vector(y),1/as.vector(xi_root), mixcompdist = "normal", nullweight = nullprior,
+    #          outputlevel = "PosteriorMean", optmethod = "mixSQP");
+    fit     = EFASH_poisson(as.vector(y),as.vector(xi_root))
+    return(matrix(fit,r,k))
+  }
+  
+  # start loop
+  for (i in 1:maxiter){
+    L     = update_F(t(X), tau, F, L, nullprior = n*p);
+    F     = update_F(X, tau, L, F, nullprior = n*p);
+    X_hat = L %*% t(F)
+    tau = sum(X_hat) / norm(X - X_hat, type = "f")^2
+  }
+  
+  return( list( L = L, F = F, tau = tau, X_hat = X_hat ) )
+}
+```
+
+```{r}
+out = EFMF_poisson(X, k = 10)
+plot(as.cimg(out$X_hat))
+```
+
+```{r}
+NMF_leeseung <- function(X, k = 10, maxiter = 500){
+    
+  # set size
+  n   = dim(X)[1];
+  p   = dim(X)[2];
+  
+  # random initialization
+  set.seed(1)
+  L   = matrix(runif(n*k), n, k);
+  F   = matrix(runif(p*k), p, k);
+
+  # update function
+  update_F <- function(X,L,F){
+    return( F * t(t(L) %*% (X / (L %*% t(F))) / colSums(L)) )
+  }
+
+  for (i in 1:maxiter){
+    L = update_F(t(X),F,L)
+    F = update_F(X,L,F)
+  }
+    return( list( L = L, F = F, X_hat = L %*% t(F) ) )
+  
+}
+```
+
+```{r}
+out_nmf = NMF_leeseung(X)
+plot(as.cimg(out_nmf$X_hat))
+```
