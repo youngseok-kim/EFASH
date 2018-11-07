@@ -6,11 +6,12 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(Matrix)
 ```
 
 ## Poisson ASH
 
-### Introduciton
+### Introduction
 
 Here we develop a Poisson ASH. We generalize the ASH problem to exponential family, but we will restrict ourselves to Poisson verison in this note. See https://stephenslab.slack.com/files/U1UJQLMAA/FD4JJ8VMJ/sample_appendix.pdf for details.
 
@@ -151,18 +152,25 @@ EFASH_poisson <- function(x, tau, nv = nv){
 
 
 ```{r}
-X = X = load.image("~/git/Peter/EFASH/data/images.png")[,,1,1]
+X = load.image("~/git/Peter/EFASH/data/images.png")[,,1,1]
+```
 
-EFMF_poisson <- function(X, k = 1, maxiter = 100){
+```{r}
+EFMF_poisson <- function(X, k = 1, init = NULL, verbose = FALSE, maxiter = 100){
   
   # set size
   n   = dim(X)[1];
   p   = dim(X)[2];
   
   # random initialization
-  set.seed(1)
-  L   = matrix(runif(n*k), n, k);
-  F   = matrix(runif(p*k), p, k);
+  if (is.null(init)){
+    set.seed(1)
+    L   = matrix(runif(n*k), n, k);
+    F   = matrix(runif(p*k), p, k);
+  } else{
+    L = init$L;
+    F = init$F;
+  }
   
   # constant structure for precision
   # tau = matrix(1,n,p) * sum(L %*% t(F)) / norm(X- L %*% t(F), type = "f")^2;
@@ -188,6 +196,8 @@ EFMF_poisson <- function(X, k = 1, maxiter = 100){
     F     = update_F(X, tau, L, F, nullprior = n*p);
     X_hat = L %*% t(F)
     tau = sum(X_hat) / norm(X - X_hat, type = "f")^2
+    if (verbose == TRUE)
+      cat(i,"-th iter done \n")
   }
   
   return( list( L = L, F = F, tau = tau, X_hat = X_hat ) )
@@ -200,7 +210,7 @@ plot(as.cimg(out$X_hat))
 ```
 
 ```{r}
-NMF_leeseung <- function(X, k = 10, maxiter = 500){
+NMF_leeseung <- function(X, k = 10, verbose = FALSE, maxiter = 500){
     
   # set size
   n   = dim(X)[1];
@@ -213,19 +223,67 @@ NMF_leeseung <- function(X, k = 10, maxiter = 500){
 
   # update function
   update_F <- function(X,L,F){
-    return( F * t(t(L) %*% (X / (L %*% t(F))) / colSums(L)) )
+    return( Matrix(F * t(t(L) %*% (X / (L %*% t(F))) / Matrix::colSums(L)), sparse = TRUE ) )
   }
 
   for (i in 1:maxiter){
     L = update_F(t(X),F,L)
     F = update_F(X,L,F)
+    if (verbose == TRUE)
+      cat(i,"-th iter done\n")
   }
     return( list( L = L, F = F, X_hat = L %*% t(F) ) )
   
 }
 ```
 
+Let's compare this with nonnegative matrix factorization (NMF) algorithm by Lee and Seung.
+
 ```{r}
 out_nmf = NMF_leeseung(X)
-plot(as.cimg(out_nmf$X_hat))
+plot(as.cimg(as.matrix(out_nmf$X_hat)))
+```
+
+## Topic Modeling
+
+```{r}
+X           = read.table("~/git/Youngseok/data/topic.txt", header = FALSE, sep = ',')
+X           = Matrix(as.matrix(X), sparse = TRUE)
+zeroind     = which(rowSums(X) == 0)
+X           = X[-zeroind,]
+colnames(X) = NULL
+name        = as.vector(read.table("~/git/Youngseok/data/topicname.txt", header = FALSE, sep = ',')$V1)
+name[100:110]
+```
+
+Now let's see how data look like. The data matrix $X$ is $n = 11314$ (nonzero indices $10907$) by $p = 1000$ and is very sparse.
+
+```{r}
+head(X)
+```
+
+Now we run a naive NMF algorithm.
+
+```{r}
+out2_nmf  = NMF_leeseung(X, k = 10, maxiter = 30)
+topic_est = matrix(0,10,10) 
+F_norm    = t(t(out2_nmf$F) * colSums(out2_nmf$L))
+for (i in 1:10){
+  o             = order(F_norm[,i], decreasing = TRUE)
+  topic_est[,i] = name[o[1:10]]
+}
+topic_est
+```
+
+
+```{r}
+init         = NMF_leeseung(X, k = 10, maxiter = 5)
+out2_poisson = EFMF_poisson(X, k = 10, init = init, verbose = TRUE, maxiter = 10)
+topic_est2   = matrix(0,10,10) 
+F_norm2      = t(t(out2_poisson$F) * colSums(out2_poisson$L))
+for (i in 1:10){
+  o             = order(F_norm2[,i], decreasing = TRUE)
+  topic_est2[,i] = name[o[1:10]]
+}
+topic_est2
 ```
